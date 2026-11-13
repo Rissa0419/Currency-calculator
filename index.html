@@ -1,81 +1,131 @@
-<!doctype html>
-<html lang="zh-Hant">
+<!DOCTYPE html>
+<html lang="zh-TW">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#3678d4"><meta name="description" content="外幣刷卡與手續費試算">
-<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml">
-<title>外幣刷卡計算器</title>
-<style>
-:root{font-family:system-ui,-apple-system,sans-serif;color:#233044;background:#edf2f8}*{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px}.card{width:min(100%,420px);padding:26px;background:white;border-radius:20px;box-shadow:0 12px 35px #1e3a5f18}h1{font-size:24px;text-align:center;margin:0 0 8px}.status{text-align:center;font-size:13px;color:#66768a;margin:0 0 22px;line-height:1.5}.field{margin:16px 0}label{display:block;font-size:14px;color:#556477;margin-bottom:7px}input,select{width:100%;padding:13px;border:1px solid #cbd5e1;border-radius:10px;font-size:17px;background:#fff;color:#223}input:focus,select:focus{outline:2px solid #4a90e2;outline-offset:1px}.results{background:#f5f8fc;border-left:5px solid #4a90e2;border-radius:10px;padding:14px;margin-top:24px}.line{display:flex;justify-content:space-between;gap:12px;padding:9px 0}.line span:last-child{text-align:right;font-variant-numeric:tabular-nums}.fee{color:#c44a4a}.total{font-weight:750;font-size:19px;border-top:1px solid #d5dce6;margin-top:5px;padding-top:16px}.note{font-size:12px;line-height:1.6;color:#66768a;margin:18px 0 0}button{width:100%;border:0;background:#3678d4;color:#fff;border-radius:10px;padding:12px;font-size:15px;cursor:pointer;margin-top:12px}button:disabled{opacity:.65}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#4a90e2">
+  <title>外幣刷卡計算器</title>
+  <style>
+    /* 繁中：設定全站配色與手機友善排版。 EN: Set theme colors and mobile-friendly layout. */
+    :root { --primary-color: #4a90e2; }
+    * { box-sizing: border-box; }
+    body { font-family: system-ui, "Noto Sans TC", sans-serif; background: #f0f2f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; padding: 18px; }
+    .card { background: white; padding: 26px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); width: 100%; max-width: 390px; }
+    h2 { text-align: center; color: #333; margin: 0 0 20px; }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 6px; color: #666; font-size: 14px; }
+    input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; background: white; }
+    .status { font-size: 12px; color: #777; text-align: center; margin-bottom: 15px; line-height: 1.6; }
+    .result-box { background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 5px solid var(--primary-color); }
+    .result-line { display: flex; justify-content: space-between; gap: 12px; margin: 10px 0; font-size: 15px; }
+    .result-line span:last-child { text-align: right; }
+    .highlight { color: #d9534f; font-weight: bold; }
+    .total-line { border-top: 1px solid #ddd; padding-top: 12px; font-weight: bold; font-size: 18px; color: #2c3e50; }
+    .effective-rate { color: #667085; text-align: right; font-size: 12px; margin-top: 8px; overflow-wrap: anywhere; }
+    .note { font-size: 12px; color: #777; line-height: 1.6; margin: 16px 0 0; }
+  </style>
 </head>
-<body><main class="card"><h1>💳 外幣刷卡計算器</h1><p id="status" class="status" role="status">正在取得參考匯率…</p>
-<div class="field"><label for="currency">選擇幣別</label><select id="currency"><option value="JPY">日圓 JPY</option><option value="CNY">人民幣 CNY</option><option value="USD">美金 USD</option><option value="EUR">歐元 EUR</option><option value="KRW">韓元 KRW</option></select></div>
-<div class="field"><label for="amount">輸入外幣金額</label><input id="amount" type="number" min="0" step="any" inputmode="decimal" placeholder="例如：2305"></div>
-<div class="results"><div class="line"><span>參考匯率（1 外幣）</span><span id="rate">尚未取得</span></div><div class="line"><span>折合台幣</span><span id="base">NT$ 0.00</span></div><div class="line"><span>1.5% 手續費</span><span id="fee" class="fee">NT$ 0.00</span></div><div class="line total"><span>預估應付總額</span><span id="total">NT$ 0</span></div></div>
-<button id="refresh" type="button">重新整理匯率</button><p class="note">匯率來源：ExchangeRate-API 公開參考資料，非即時銀行報價。刷卡實際金額依發卡銀行、卡組織與入帳時間為準。離線時可使用先前成功取得的匯率。</p></main>
-<script>
-// 中文：使用固定 API 取得以台幣為基準的參考匯率。
-// English: Fetch reference exchange rates with TWD as the base currency.
-const API_URL='https://open.er-api.com/v6/latest/TWD';
-const $=id=>document.getElementById(id);
-let rates={};
-let updated='';
-const money=(value,digits=2)=>'NT$ '+value.toLocaleString('zh-TW',{minimumFractionDigits:digits,maximumFractionDigits:digits});
+<body>
+  <main class="card">
+    <h2>外幣刷卡計算器</h2>
+    <div id="loading" class="status" role="status" aria-live="polite">正在讀取參考匯率...</div>
+    <div class="form-group">
+      <label for="currency">選擇幣別</label>
+      <select id="currency">
+        <option value="JPY">日圓 (JPY)</option>
+        <option value="CNY">人民幣 (CNY)</option>
+        <option value="USD">美金 (USD)</option>
+        <option value="EUR">歐元 (EUR)</option>
+        <option value="KRW">韓元 (KRW)</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label for="foreignAmount">輸入外幣金額</label>
+      <input type="number" id="foreignAmount" min="0" step="any" inputmode="decimal" placeholder="0.00">
+    </div>
+    <section class="result-box" aria-label="換算結果">
+      <div class="result-line"><span>參考匯率 (TWD):</span><span id="rateDisplay">---</span></div>
+      <div class="result-line"><span>折合台幣:</span><span id="twdBase">0</span></div>
+      <div class="result-line"><span>1.5% 手續費:</span><span id="fee" class="highlight">0</span></div>
+      <div class="result-line total-line"><span>預估金額 (TWD):</span><span id="total">0</span></div>
+      <div class="effective-rate">（含手續費匯率：<span id="effectiveRate">---</span>）</div>
+    </section>
+    <p class="note">匯率僅供估算。實際刷卡金額依卡組織、發卡銀行及入帳日期而異。</p>
+  </main>
+  <script>
+    // 繁中：API 以台幣為基準，提供 1 TWD 可兌換多少外幣。
+    // EN: The API uses TWD as its base and returns foreign currency units per TWD.
+    const API_URL = "https://open.er-api.com/v6/latest/TWD";
+    const FEE_RATE = 0.015;
+    let rates = {};
+    const currencyEl = document.getElementById("currency");
+    const amountEl = document.getElementById("foreignAmount");
+    const statusEl = document.getElementById("loading");
+    const numberFormat = new Intl.NumberFormat("zh-TW", { maximumFractionDigits: 0 });
+    const feeFormat = new Intl.NumberFormat("zh-TW", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// 中文：將外幣金額換算成台幣，並計入 1.5% 手續費。
-// English: Convert foreign currency to TWD and add a 1.5% card fee.
-function calculate(){
-  const currency=$('currency').value;
-  const raw=$('amount').value;
-  const amount=Number(raw);
-  const rate=rates[currency];
-  $('rate').textContent=rate>0?money(1/rate,6):'尚未取得';
-  const valid=raw.trim()!==''&&Number.isFinite(amount)&&amount>=0&&rate>0;
-  const base=valid?amount/rate:0;
-  const fee=base*0.015;
-  $('base').textContent=money(base);
-  $('fee').textContent=money(fee);
-  $('total').textContent=money(Math.round(base+fee),0);
-}
+    // 繁中：依幣別調整匯率小數位，避免韓元等低面額匯率被過度四捨五入。
+    // EN: Show more precision for small unit exchange rates such as KRW.
+    function formatRate(value) {
+      return value < 0.01 ? value.toFixed(7) : value.toFixed(5);
+    }
 
-// 中文：成功時快取匯率，網路失敗時保留最後一次有效資料。
-// English: Cache successful rates and retain the latest valid data if offline.
-async function fetchRates(){
-  $('refresh').disabled=true;
-  $('status').textContent='正在取得參考匯率…';
-  try{
-    const response=await fetch(API_URL,{cache:'no-store'});
-    if(!response.ok)throw new Error('HTTP '+response.status);
-    const data=await response.json();
-    if(data.result!=='success'||!data.rates||!data.rates.JPY)throw new Error('Invalid rate response');
-    rates=data.rates;
-    updated=data.time_last_update_utc||new Date().toISOString();
-    localStorage.setItem('fx-rates',JSON.stringify({rates,updated}));
-    $('status').textContent='匯率資料更新：'+new Date(updated).toLocaleString('zh-TW');
-  }catch(error){
-    $('status').textContent=Object.keys(rates).length?'連線失敗，使用已儲存匯率（'+new Date(updated).toLocaleString('zh-TW')+'）':'無法取得匯率，請確認網路連線後重試';
-    console.error('Exchange rate request failed:',error);
-  }finally{$('refresh').disabled=false;calculate();}
-}
+    // 繁中：根據外幣金額、參考匯率及 1.5% 手續費更新所有結果。
+    // EN: Update all results using the amount, reference rate, and 1.5% fee.
+    function calculate() {
+      const currency = currencyEl.value;
+      const amount = Number(amountEl.value);
+      const unitsPerTwd = Number(rates[currency]);
+      const validRate = Number.isFinite(unitsPerTwd) && unitsPerTwd > 0;
+      const rateToTwd = validRate ? 1 / unitsPerTwd : null;
+      document.getElementById("rateDisplay").textContent = validRate ? formatRate(rateToTwd) : "---";
+      document.getElementById("effectiveRate").textContent = validRate
+        ? `${formatRate(rateToTwd * (1 + FEE_RATE))} TWD/${currency}` : "---";
 
-// 中文：還原上次使用的幣別、金額與快取資料。
-// English: Restore the previous currency, amount, and cached exchange rates.
-try{
-  const saved=JSON.parse(localStorage.getItem('fx-rates')||'null');
-  if(saved?.rates&&saved?.updated){rates=saved.rates;updated=saved.updated;}
-  const currency=localStorage.getItem('fx-currency');
-  if(['JPY','CNY','USD','EUR','KRW'].includes(currency))$('currency').value=currency;
-  $('amount').value=localStorage.getItem('fx-amount')||'';
-}catch(error){console.warn('Stored preferences unavailable:',error);}
-$('currency').addEventListener('change',()=>{localStorage.setItem('fx-currency',$('currency').value);calculate();});
-$('amount').addEventListener('input',()=>{localStorage.setItem('fx-amount',$('amount').value);calculate();});
-$('refresh').addEventListener('click',fetchRates);
-calculate();fetchRates();
+      // 繁中：未輸入有效正數時，保留匯率顯示並將金額歸零。
+      // EN: Keep the rate visible but reset totals when no positive amount is entered.
+      if (!validRate || !Number.isFinite(amount) || amount <= 0) {
+        document.getElementById("twdBase").textContent = "0";
+        document.getElementById("fee").textContent = "0";
+        document.getElementById("total").textContent = "0";
+        return;
+      }
+      const twdAmount = amount * rateToTwd;
+      const fee = twdAmount * FEE_RATE;
+      const total = twdAmount + fee;
+      document.getElementById("twdBase").textContent = numberFormat.format(twdAmount);
+      document.getElementById("fee").textContent = feeFormat.format(fee);
+      document.getElementById("total").textContent = numberFormat.format(Math.round(total));
+    }
 
-// 中文：在 HTTPS 網址下註冊 Service Worker，支援安裝與離線開啟。
-// English: Register the service worker on HTTPS for installation and offline launch.
-if('serviceWorker' in navigator&&location.protocol==='https:'){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(console.warn));
-}
-</script></body></html>
+    // 繁中：讀取 API 匯率，並使用 API 提供的更新日期標示資料時間。
+    // EN: Fetch rates and display the update time supplied by the API.
+    async function fetchRates() {
+      try {
+        const response = await fetch(API_URL, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const data = await response.json();
+        if (data.result !== "success" || !data.rates) throw new Error("Invalid rate data");
+        rates = data.rates;
+        const updated = data.time_last_update_utc
+          ? new Date(data.time_last_update_utc).toLocaleString("zh-TW", { timeZone: "Asia/Taipei" })
+          : "時間未提供";
+        statusEl.textContent = `參考匯率資料更新（台灣時間）：${updated}`;
+        calculate();
+      } catch (error) {
+        // 繁中：失敗時顯示明確錯誤，不使用可能過期的虛構匯率。
+        // EN: Show a clear error and never substitute fabricated exchange rates.
+        statusEl.textContent = "匯率讀取失敗，請檢查網路並重新整理。";
+        console.error("Exchange rate fetch failed:", error);
+        calculate();
+      }
+    }
+
+    // 繁中：使用者更改金額或幣別時立即重新計算。
+    // EN: Recalculate whenever the amount or selected currency changes.
+    currencyEl.addEventListener("change", calculate);
+    amountEl.addEventListener("input", calculate);
+    fetchRates();
+  </script>
+</body>
+</html>

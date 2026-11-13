@@ -1,0 +1,11 @@
+{
+  "name":"外幣刷卡計算器",
+  "short_name":"刷卡匯率",
+  "description":"外幣換算與 1.5% 刷卡手續費試算",
+  "start_url":"./",
+  "scope":"./",
+  "display":"standalone",
+  "background_color":"#edf2f8",
+  "theme_color":"#3678d4",
+  "icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]
+}
